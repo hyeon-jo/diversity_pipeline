@@ -1,12 +1,19 @@
-"""
-Video Curation Pipeline
+from .config import VideoEmbedderConfig, ClusteringConfig, AnalysisConfig
+from .types import ClusterInfo, PipelineResults
+from .embedder import VideoEmbedder
+from .clusterer import GraphClusterer
+from .analyzer import ClusterAnalyzer
+from .captioning import CaptioningInterface, InternVLCaptioningInterface, MockCaptioningInterface
+from .pipeline import VideoCurationPipeline
+from .demo import generate_synthetic_embeddings, print_results_summary
 
-A comprehensive pipeline for video analysis using:
-- InternVL3.5-8B for embedding extraction
-- Leiden clustering for scenario discovery
-- Edge case and void detection
-"""
-
-# Will be populated after all modules are created
-
-__version__ = "1.0.0"
+__all__ = [
+    "VideoEmbedderConfig", "ClusteringConfig", "AnalysisConfig",
+    "ClusterInfo", "PipelineResults",
+    "VideoEmbedder",
+    "GraphClusterer",
+    "ClusterAnalyzer",
+    "CaptioningInterface", "InternVLCaptioningInterface", "MockCaptioningInterface",
+    "VideoCurationPipeline",
+    "generate_synthetic_embeddings", "print_results_summary"
+]

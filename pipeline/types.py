@@ -1,13 +1,8 @@
-"""Data types and result containers."""
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Optional
-
+from typing import Optional, TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
-
 
 @dataclass
 class ClusterInfo:
@@ -20,7 +15,6 @@ class ClusterInfo:
     representative_path: Optional[str] = None
     is_micro_cluster: bool = False
     is_low_density: bool = False
-
 
 @dataclass
 class PipelineResults:

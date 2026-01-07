@@ -1,17 +1,11 @@
-"""Graph construction and Leiden clustering for scenario discovery."""
-
 from __future__ import annotations
-
 import logging
 from typing import Any, Optional
-
 import numpy as np
 from numpy.typing import NDArray
-
 from .config import ClusteringConfig
 
 logger = logging.getLogger(__name__)
-
 
 class GraphClusterer:
     """

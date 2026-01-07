@@ -1,11 +1,6 @@
-"""Mock captioning interface for demonstration purposes."""
-
 from __future__ import annotations
-
 import numpy as np
-
 from .base import CaptioningInterface
-
 
 class MockCaptioningInterface(CaptioningInterface):
     """
@@ -50,40 +45,6 @@ class MockCaptioningInterface(CaptioningInterface):
     ) -> str:
         """
         Generate a mock caption for a video.
-
-        In production, replace this with:
-
-        ```python
-        # Example GPT-4V API call (pseudocode)
-        from openai import OpenAI
-
-        client = OpenAI()
-
-        # Extract key frames from video
-        frames = extract_key_frames(video_path, n_frames=4)
-
-        # Encode frames as base64
-        images = [encode_image(frame) for frame in frames]
-
-        response = client.chat.completions.create(
-            model="gpt-4-vision-preview",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Describe this driving scenario..."},
-                    *[{"type": "image_url", "image_url": img} for img in images]
-                ]
-            }]
-        )
-        return response.choices[0].message.content
-        ```
-
-        Args:
-            video_path: Path to the video file.
-            cluster_id: ID of the cluster this video represents.
-
-        Returns:
-            Caption string describing the scenario.
         """
         # Mock: Select scenario based on cluster_id for consistency
         scenario_idx = cluster_id % len(self.SCENARIO_TYPES)

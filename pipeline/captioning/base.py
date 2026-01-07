@@ -1,9 +1,4 @@
-"""Abstract base class for video captioning interfaces."""
-
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-
 
 class CaptioningInterface(ABC):
     """Abstract base class for video captioning interfaces."""
@@ -14,16 +9,7 @@ class CaptioningInterface(ABC):
         video_path: str,
         cluster_id: int
     ) -> str:
-        """
-        Generate caption for a video.
-
-        Args:
-            video_path: Path to the video file.
-            cluster_id: ID of the cluster this video represents.
-
-        Returns:
-            Caption string describing the scenario.
-        """
+        """Generate caption for a video."""
         pass
 
     def generate_cluster_captions(

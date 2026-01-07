@@ -1,18 +1,13 @@
-"""InternVL-based video captioning with embedding caching support."""
-
 from __future__ import annotations
-
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional, Union
-
 import numpy as np
 
 from .base import CaptioningInterface
+from ..embedder import frame_loader
 
 logger = logging.getLogger(__name__)
-
 
 class InternVLCaptioningInterface(CaptioningInterface):
     """
@@ -69,7 +64,7 @@ class InternVLCaptioningInterface(CaptioningInterface):
         # Initialize transform
         self._init_transform()
 
-        logger.info("InternVLCaptioningInterface initialized")
+        logger.info(f"InternVLCaptioningInterface initialized")
         logger.info(f"  Embedding cache: {self.embedding_cache_dir}")
         logger.info(f"  Frame base dir: {self.frame_base_dir}")
 
@@ -136,6 +131,7 @@ class InternVLCaptioningInterface(CaptioningInterface):
 
         # Search for matching frame directory
         # Pattern: N[숫자7자리]-[YYMMDDhhmmss]
+        import re
         pattern = re.compile(rf'^{re.escape(video_name)}$')
 
         # Search in frame_base_dir recursively
@@ -149,51 +145,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
                         return cmr_dirs[0]
 
         return None
-
-    def _load_frames_for_captioning(
-        self,
-        frame_dir: Path
-    ) -> tuple[Any, list[int]]:
-        """
-        Load frames from directory for captioning.
-
-        Args:
-            frame_dir: Path to frame directory.
-
-        Returns:
-            Tuple of (pixel_values tensor, num_patches_list).
-        """
-        import torch
-        from PIL import Image
-
-        # Get all jpg files sorted by name
-        frame_files = sorted(frame_dir.glob("*.jpg"))
-        if not frame_files:
-            frame_files = sorted(frame_dir.glob("*.JPG"))
-
-        if not frame_files:
-            raise ValueError(f"No JPG files found in {frame_dir}")
-
-        total_frames = len(frame_files)
-
-        # Sample frames uniformly
-        if total_frames <= self.num_frames:
-            indices = np.arange(total_frames)
-        else:
-            indices = np.linspace(0, total_frames - 1, self.num_frames, dtype=int)
-
-        pixel_values_list = []
-        num_patches_list = []
-
-        for idx in indices:
-            img = Image.open(frame_files[idx]).convert("RGB")
-            pixel_values = self._transform(img).unsqueeze(0)
-            pixel_values_list.append(pixel_values)
-            num_patches_list.append(1)
-
-        pixel_values = torch.cat(pixel_values_list, dim=0)
-
-        return pixel_values, num_patches_list
 
     def _caption_from_frames(
         self,
@@ -214,8 +165,13 @@ class InternVLCaptioningInterface(CaptioningInterface):
         """
         import torch
 
-        # Load frames
-        pixel_values, num_patches_list = self._load_frames_for_captioning(frame_dir)
+        # Load frames using frame_loader
+        # Re-use the transform we initialized
+        pixel_values, num_patches_list = frame_loader.load_frames_for_internvl(
+            frame_dir, 
+            self._transform,
+            self.num_frames
+        )
 
         # Move to device and dtype
         torch_dtype = self._get_torch_dtype()
@@ -255,19 +211,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
     ) -> str:
         """
         Generate caption using cached vision embeddings.
-
-        Note: This method attempts to inject cached embeddings directly into
-        the LLM. However, InternVL's architecture may require the full
-        vision-to-language projection, so this may fall back to frame-based
-        captioning if direct injection is not supported.
-
-        Args:
-            embedding_path: Path to cached .npy embedding file.
-            prompt: Prompt for captioning.
-            generation_config: Optional generation configuration.
-
-        Returns:
-            Generated caption string.
         """
         import torch
 
@@ -294,7 +237,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
             }
 
         # Try to use generate with pre-computed embeddings
-        # Note: This requires InternVL to support vit_embeds injection
         try:
             # Build input with placeholder
             video_prefix = "<image>\n"
@@ -304,7 +246,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
             inputs = self.tokenizer(full_prompt, return_tensors="pt").to(self.device)
 
             # Check if model supports direct embedding injection
-            # InternVL's generate method may accept vit_embeds parameter
             with torch.no_grad():
                 # Try direct generation with cached embeddings
                 if hasattr(self.model, 'generate_with_embeds'):
@@ -315,9 +256,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
                         **generation_config
                     )
                 else:
-                    # Standard chat with pixel_values=None, vit_embeds provided
-                    # This approach depends on InternVL's internal implementation
-                    # If not supported, fall back to frame loading
                     raise NotImplementedError(
                         "Direct embedding injection not supported, "
                         "falling back to frame-based captioning"
@@ -338,18 +276,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
     ) -> str:
         """
         Generate caption for a video using InternVL.
-
-        This method implements hybrid captioning:
-        1. First, try to use cached embeddings if available
-        2. If cached embedding captioning fails, reload frames
-
-        Args:
-            video_path: Path to video or video name (used to locate cache/frames).
-            cluster_id: ID of the cluster this video represents.
-            prompt: Prompt for captioning.
-
-        Returns:
-            Caption string describing the scenario.
         """
         # Try cached embedding first
         embedding_path = self._get_embedding_path(video_path)
@@ -387,14 +313,6 @@ class InternVLCaptioningInterface(CaptioningInterface):
     ) -> dict[int, str]:
         """
         Generate captions for all representative videos.
-
-        Args:
-            representative_videos: Mapping of cluster_id to video path.
-            prompt: Prompt for captioning.
-            show_progress: Whether to show progress bar.
-
-        Returns:
-            Mapping of cluster_id to caption string.
         """
         captions = {}
 

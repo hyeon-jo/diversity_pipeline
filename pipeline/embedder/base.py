@@ -1,31 +1,24 @@
-"""Main VideoEmbedder class for extracting embeddings using InternVL3.5-8B."""
-
 from __future__ import annotations
-
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union
-
+from typing import Any, Optional, Union, TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
 from ..config import VideoEmbedderConfig
+from .model_loader import InternVLModelLoader
 from . import frame_loader
-from . import model_loader
+
+if TYPE_CHECKING:
+    import torch
 
 logger = logging.getLogger(__name__)
-
 
 class VideoEmbedder:
     """
     Extract dense vector representations from video clips using InternVL3.5-8B.
-
-    This class handles:
-    - Loading the InternVL3.5-8B model and tokenizer
-    - Frame sampling with dynamic resolution preprocessing
-    - Vision encoder feature extraction (without LLM forward)
-    - L2 normalization of embeddings
-    - Caching embeddings for later captioning
+    
+    Delegates model loading to InternVLModelLoader and frame loading to frame_loader module.
     """
 
     def __init__(self, config: Optional[VideoEmbedderConfig] = None):
@@ -36,40 +29,31 @@ class VideoEmbedder:
             config: Configuration for the embedder. Uses defaults if None.
         """
         self.config = config or VideoEmbedderConfig()
-        self.device = None  # Lazily initialized
-        self.model = None
-        self.tokenizer = None
-        self._is_loaded = False
-        self._transform = None
-        self._model_loader = None
+        self.loader = InternVLModelLoader(self.config)
 
-    def _ensure_torch(self) -> None:
-        """Ensure torch is imported and device is set."""
-        if self.device is None:
-            import torch
-            self.device = torch.device(self.config.device)
+    @property
+    def model(self):
+        return self.loader.model
+
+    @property
+    def tokenizer(self):
+        return self.loader.tokenizer
+        
+    @property
+    def device(self):
+        return self.loader.device
+
+    @property
+    def _is_loaded(self):
+        return self.loader.is_loaded
 
     def load_model(self) -> None:
-        """Load the InternVL3.5-8B model and tokenizer from HuggingFace."""
-        if self._is_loaded:
-            logger.info("Model already loaded, skipping...")
-            return
+        """Load the InternVL3.5-8B model and tokenizer."""
+        self.loader.load_model()
 
-        self._ensure_torch()
-
-        # Create model loader
-        self._model_loader = model_loader.InternVLModelLoader(
-            model_name=self.config.model_name,
-            input_size=self.config.input_size,
-            torch_dtype=self.config.torch_dtype,
-            use_flash_attn=self.config.use_flash_attn,
-            trust_remote_code=self.config.trust_remote_code,
-            device=str(self.device)
-        )
-
-        # Load model, tokenizer, and transform
-        self.model, self.tokenizer, self._transform = self._model_loader.load_model()
-        self._is_loaded = True
+    @staticmethod
+    def extract_video_name_from_frame_dir(frame_dir: Union[str, Path]) -> str:
+        return frame_loader.extract_video_name_from_frame_dir(frame_dir)
 
     def extract_embedding(
         self,
@@ -83,9 +67,6 @@ class VideoEmbedder:
 
         Returns:
             L2-normalized embedding vector.
-
-        Raises:
-            RuntimeError: If video cannot be processed.
         """
         import torch
 
@@ -95,9 +76,9 @@ class VideoEmbedder:
         try:
             # Sample frames from video
             frames = frame_loader.sample_frames_decord(
-                video_path,
-                num_frames=self.config.num_frames,
-                strategy=self.config.frame_sample_strategy
+                video_path, 
+                self.config.num_frames, 
+                self.config.frame_sample_strategy
             )
 
             # Convert numpy frames to tensor with transforms
@@ -105,15 +86,13 @@ class VideoEmbedder:
             pixel_values_list = []
             for i in range(frames.shape[0]):
                 img = Image.fromarray(frames[i])
-                pv = self._transform(img).unsqueeze(0)
+                pv = self.loader.transform(img).unsqueeze(0)
                 pixel_values_list.append(pv)
 
             pixel_values = torch.cat(pixel_values_list, dim=0)
 
             # Extract vision features
-            vit_embeds = self._model_loader.extract_vision_features(
-                self.model, pixel_values
-            )
+            vit_embeds = self.loader.extract_vision_features(pixel_values)
 
             # Mean pooling over all patches and frames
             # vit_embeds shape: (num_frames, num_patches, hidden_dim)
@@ -160,13 +139,37 @@ class VideoEmbedder:
             except ImportError:
                 pass
 
+        batch_frames = []
+        batch_indices = []
+        
+        # Use batch_size from config or default to 1
+        batch_size = getattr(self.config, 'batch_size', 1)
+
         for idx, video_path in enumerate(iterator):
             try:
-                embedding = self.extract_embedding(video_path)
-                embeddings.append(embedding)
+                frames = frame_loader.sample_frames_decord(
+                    video_path,
+                    self.config.num_frames,
+                    self.config.frame_sample_strategy
+                )
+                batch_frames.append(frames)
+                batch_indices.append(idx)
+
+                # Process batch when full
+                if len(batch_frames) >= batch_size:
+                    batch_embeddings = self._process_batch(batch_frames)
+                    embeddings.extend(batch_embeddings)
+                    batch_frames = []
+                    batch_indices = []
+
             except Exception as e:
                 logger.warning(f"Failed to process {video_path}: {e}")
                 failed_indices.append(idx)
+
+        # Process remaining batch
+        if batch_frames:
+            batch_embeddings = self._process_batch(batch_frames)
+            embeddings.extend(batch_embeddings)
 
         if not embeddings:
             raise RuntimeError("No videos could be processed successfully")
@@ -194,24 +197,21 @@ class VideoEmbedder:
             self.load_model()
 
         frame_dir = Path(frame_dir)
-        video_name = frame_loader.extract_video_name_from_frame_dir(frame_dir)
+        video_name = self.extract_video_name_from_frame_dir(frame_dir)
 
         try:
             # Load frames with InternVL preprocessing
             pixel_values, num_patches_list = frame_loader.load_frames_for_internvl(
-                frame_dir,
-                transform=self._transform,
-                num_frames=self.config.num_frames,
-                strategy=self.config.frame_sample_strategy
+                frame_dir, 
+                self.loader.transform,
+                self.config.num_frames,
+                self.config.frame_sample_strategy
             )
 
             # Extract vision features using InternVL's vision encoder
-            vit_embeds = self._model_loader.extract_vision_features(
-                self.model, pixel_values
-            )
+            vit_embeds = self.loader.extract_vision_features(pixel_values)
 
             # Mean pooling over all patches and frames
-            # vit_embeds shape: (num_frames, num_patches, hidden_dim)
             embedding = vit_embeds.mean(dim=(0, 1))  # (hidden_dim,)
 
             # Normalize if configured
@@ -236,16 +236,7 @@ class VideoEmbedder:
         embedding: NDArray[np.float32],
         video_name: str
     ) -> Path:
-        """
-        Save embedding to output directory with video name.
-
-        Args:
-            embedding: Embedding vector to save.
-            video_name: Original video filename (e.g., "N1234567-231215120000.mp4")
-
-        Returns:
-            Path to saved embedding file.
-        """
+        """Save embedding to output directory with video name."""
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -266,14 +257,6 @@ class VideoEmbedder:
     ) -> tuple[NDArray[np.float32], list[str], list[int]]:
         """
         Extract embeddings from multiple frame directories.
-
-        Args:
-            frame_dirs: List of paths to frame directories.
-            save_embeddings: Whether to save embeddings to output directory.
-            show_progress: Whether to show progress bar.
-
-        Returns:
-            Tuple of (embeddings array, video names, failed indices).
         """
         if not self._is_loaded:
             self.load_model()
@@ -313,86 +296,63 @@ class VideoEmbedder:
 
         return np.stack(embeddings), video_names, failed_indices
 
-    # Expose frame_loader functions as static methods for backward compatibility
     @staticmethod
     def find_frame_directories(
         base_dir: Union[str, Path],
         pattern: str = "**/CMR_GT_Frame"
     ) -> list[Path]:
-        """
-        Find all frame directories matching the expected structure (legacy glob method).
-
-        Expected structure:
-        ./trainlake/[yy].[mm]w/N[숫자7자리]-[YYMMDDhhmmss]/RAW_DB/*_CMR*/CMR_GT_Frame/
-
-        Args:
-            base_dir: Base directory to search from.
-            pattern: Glob pattern to match frame directories.
-
-        Returns:
-            List of paths to frame directories.
-
-        Note:
-            This uses Path.glob() which can be slow. Consider using
-            find_frame_directories_optimized() instead.
-        """
         return frame_loader.find_frame_directories(base_dir, pattern)
-
+        
     @staticmethod
     def find_frame_directories_optimized(
         base_dir: Union[str, Path],
         target_name: str = "CMR_GT_Frame",
         progress_callback: Optional[Any] = None
     ) -> list[Path]:
-        """
-        Find frame directories using optimized 3-stage traversal.
-
-        This method is 10-12x faster than Path.glob("**/CMR_GT_Frame").
-
-        Args:
-            base_dir: Base directory to search from.
-            target_name: Target directory name to find.
-            progress_callback: Optional callback(current_dir: str, count: int).
-
-        Returns:
-            List of paths to frame directories, sorted by path.
-        """
         return frame_loader.find_frame_directories_optimized(
             base_dir, target_name, progress_callback
         )
-
+        
     @staticmethod
     def find_frame_directories_cached(
         base_dir: Union[str, Path],
-        cache_file: Optional[Path] = None,
+        cache_file: Optional[Union[str, Path]] = None,
         force_rescan: bool = False,
         progress_callback: Optional[Any] = None
     ) -> list[Path]:
-        """
-        Find frame directories with caching support.
-
-        Args:
-            base_dir: Base directory to search from.
-            cache_file: Path to cache file (default: base_dir/.frame_dirs_cache.txt).
-            force_rescan: If True, ignore cache and rescan directories.
-            progress_callback: Optional callback for progress updates.
-
-        Returns:
-            List of paths to frame directories.
-        """
         return frame_loader.find_frame_directories_cached(
             base_dir, cache_file, force_rescan, progress_callback
         )
 
-    @staticmethod
-    def extract_video_name_from_frame_dir(frame_dir: Union[str, Path]) -> str:
-        """
-        Extract original video name from frame directory path.
+    def _process_batch(
+        self,
+        batch_frames: list[NDArray[np.uint8]]
+    ) -> list[NDArray[np.float32]]:
+        """Process a batch of frame arrays through InternVL vision encoder."""
+        import torch
+        from PIL import Image
 
-        Args:
-            frame_dir: Path to the frame directory.
+        embeddings = []
 
-        Returns:
-            Original video filename (e.g., "N1234567-231215120000.mp4")
-        """
-        return frame_loader.extract_video_name_from_frame_dir(frame_dir)
+        for frames in batch_frames:
+            # Convert numpy frames to tensor with transforms
+            pixel_values_list = []
+            for i in range(frames.shape[0]):
+                img = Image.fromarray(frames[i])
+                pv = self.loader.transform(img).unsqueeze(0)
+                pixel_values_list.append(pv)
+
+            pixel_values = torch.cat(pixel_values_list, dim=0)
+
+            # Extract vision features
+            vit_embeds = self.loader.extract_vision_features(pixel_values)
+
+            # Mean pooling over all patches and frames
+            embedding = vit_embeds.mean(dim=(0, 1))
+
+            if self.config.normalize_embeddings:
+                embedding = torch.nn.functional.normalize(embedding, p=2, dim=-1)
+
+            embeddings.append(embedding.cpu().numpy().astype(np.float32))
+
+        return embeddings

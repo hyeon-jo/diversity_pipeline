@@ -1,9 +1,8 @@
-"""Configuration dataclasses for the video curation pipeline."""
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
+import logging
 
+logger = logging.getLogger(__name__)
 
 def _get_device() -> str:
     """Get the best available device."""
@@ -12,7 +11,6 @@ def _get_device() -> str:
         return "cuda" if torch.cuda.is_available() else "cpu"
     except ImportError:
         return "cpu"
-
 
 @dataclass
 class VideoEmbedderConfig:
@@ -28,7 +26,7 @@ class VideoEmbedderConfig:
     output_dir: str = "output"  # Directory to save embeddings
     use_flash_attn: bool = True  # Use flash attention for efficiency
     torch_dtype: str = "bfloat16"  # "bfloat16", "float16", or "float32"
-
+    batch_size: int = 1 # Added batch_size as it was used in extract_embeddings_batch
 
 @dataclass
 class ClusteringConfig:
@@ -38,7 +36,6 @@ class ClusteringConfig:
     resolution: float = 1.0  # Leiden resolution parameter
     n_iterations: int = -1  # -1 for unlimited iterations
     random_state: int = 42
-
 
 @dataclass
 class AnalysisConfig:
