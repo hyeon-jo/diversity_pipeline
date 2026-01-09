@@ -1,3 +1,7 @@
 """Video captioning interfaces."""
 
-# Will be populated after captioning modules are created
+from .base import CaptioningInterface
+from .mock import MockCaptioningInterface
+from .internvl import InternVLCaptioningInterface
+
+__all__ = ["CaptioningInterface", "MockCaptioningInterface", "InternVLCaptioningInterface"]
