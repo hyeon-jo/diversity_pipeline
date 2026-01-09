@@ -218,7 +218,8 @@ class VideoEmbedder:
             if self.config.normalize_embeddings:
                 embedding = torch.nn.functional.normalize(embedding, p=2, dim=-1)
 
-            embedding_np = embedding.cpu().numpy().astype(np.float32)
+            embedding_f32 = embedding.to(torch.float32)
+            embedding_np = embedding_f32.cpu().numpy().astype(np.float32)
 
             # Save embedding if requested
             if save_embedding:

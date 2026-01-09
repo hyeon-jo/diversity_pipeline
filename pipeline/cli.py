@@ -42,9 +42,9 @@ def main():
         help="Glob pattern to find frame directories (default: **/CMR_GT_Frame)"
     )
     parser.add_argument(
-        "--cache-dirs",
+        "--no-cache-dirs",
         action="store_true",
-        help="Enable directory caching for faster subsequent runs"
+        help="Disable optimized directory search (use slow glob instead)"
     )
     parser.add_argument(
         "--output-dir",
@@ -110,8 +110,8 @@ def main():
         print(f"Output directory: {args.output_dir}")
 
         # Find all frame directories
-        if args.cache_dirs:
-            # Use optimized cached search
+        if not args.no_cache_dirs:
+            # Use optimized cached search (default)
             def progress_callback(dir_name: str, count: int):
                 print(f"\rScanning... {count} directories checked | Current: {dir_name[:40]:<40}", end="", flush=True)
 
@@ -121,7 +121,7 @@ def main():
             )
             print()  # Newline after progress
         else:
-            # Use standard glob search
+            # Use standard glob search (slower, for compatibility)
             frame_dirs = VideoEmbedder.find_frame_directories(
                 args.frame_dir,
                 pattern=args.frame_pattern

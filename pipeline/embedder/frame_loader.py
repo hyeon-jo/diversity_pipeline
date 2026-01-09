@@ -133,6 +133,7 @@ def load_frames_for_internvl(
 
     # Concatenate all frames
     pixel_values = torch.cat(pixel_values_list, dim=0)  # (num_frames, C, H, W)
+    pixel_values = pixel_values.to(torch.bfloat16)
 
     return pixel_values, num_patches_list
 

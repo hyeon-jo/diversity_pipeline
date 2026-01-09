@@ -106,7 +106,8 @@ class InternVLModelLoader:
             # Load tokenizer
             tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
-                trust_remote_code=self.trust_remote_code
+                trust_remote_code=self.trust_remote_code,
+                fix_mistral_regex=True
             )
 
             # Load model with specified dtype
