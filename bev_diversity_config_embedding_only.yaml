@@ -1,0 +1,34 @@
+# BEV Diversity Pipeline Configuration - EMBEDDING-ONLY Mode
+#
+# Use this configuration when you already have pre-computed embeddings
+# and want to compute only Vendi Scores (no extraction needed).
+
+# REQUIRED: Path to pre-computed embeddings
+# Must be a .npy or .npz file containing embedding matrix [N, D]
+embedding_path: "/path/to/embeddings.npy"
+
+# Vendi Score Configuration
+vendi:
+  # List of q values for generalized Vendi Score
+  # - Smaller q (e.g., 0.1, 0.5): more sensitive to rare items
+  # - q=1.0: original Vendi Score (Shannon entropy)
+  # - Larger q (e.g., 2.0): more sensitive to common items
+  q_values: [0.1, 0.5, 1.0, 2.0]
+
+  # Also compute VS_infinity (most sensitive to duplicates)
+  include_infinity: true
+
+  # Similarity kernel: "cosine" (recommended), "rbf", or "linear"
+  kernel: "cosine"
+
+  # RBF gamma parameter (only used if kernel="rbf")
+  rbf_gamma: 1.0
+
+# Output directory for results
+output_dir: "./output"
+
+# NOTE: In embedding-only mode, the following are NOT needed:
+# - model (no model loading)
+# - embedding (no extraction settings)
+# - input_dir (no image directory)
+# - image_extensions (no image files)

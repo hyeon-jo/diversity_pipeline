@@ -1,0 +1,67 @@
+# BEV Diversity Pipeline Configuration - EXTRACTION Mode
+#
+# This configuration file specifies all parameters for extracting visual embeddings
+# from images and computing the Vendi Score Family diversity metrics.
+#
+# For computing Vendi Scores from pre-computed embeddings only,
+# see: bev_diversity_config_embedding_only.yaml
+
+# Model Configuration
+model:
+  # REQUIRED: Local path to InternVL3.5-8B model directory
+  # Download the model and specify the local path here
+  model_path: "/path/to/InternVL3_5-8B"
+
+  # Input image size (default: 448x448 for InternVL)
+  input_size: 448
+
+  # PyTorch data type: "bfloat16" (recommended), "float16", or "float32"
+  torch_dtype: "bfloat16"
+
+  # Device to use: "cuda" or "cpu"
+  device: "cuda"
+
+  # Use Flash Attention (if available)
+  use_flash_attn: true
+
+  # Trust remote code (required for InternVL)
+  trust_remote_code: true
+
+# Embedding Extraction Configuration
+embedding:
+  # Batch size for inference (adjust based on GPU memory)
+  batch_size: 4
+
+  # L2 normalize embeddings (recommended for cosine similarity)
+  normalize_embeddings: true
+
+# Vendi Score Configuration
+vendi:
+  # List of q values for generalized Vendi Score
+  # - Smaller q (e.g., 0.1, 0.5): more sensitive to rare items
+  # - q=1.0: original Vendi Score (Shannon entropy)
+  # - Larger q (e.g., 2.0): more sensitive to common items
+  q_values: [0.1, 0.5, 1.0, 2.0]
+
+  # Also compute VS_infinity (most sensitive to duplicates)
+  include_infinity: true
+
+  # Similarity kernel: "cosine" (recommended), "rbf", or "linear"
+  kernel: "cosine"
+
+  # RBF gamma parameter (only used if kernel="rbf")
+  rbf_gamma: 1.0
+
+# REQUIRED: Root directory containing frame images
+# All .jpg, .jpeg, .png files will be discovered recursively
+input_dir: "/path/to/frames"
+
+# Optional: Path to pre-computed embeddings (for embedding-only mode)
+# If specified, input_dir is ignored and no extraction is performed
+# embedding_path: "/path/to/embeddings.npy"
+
+# Output directory for results
+output_dir: "./output"
+
+# Image file extensions to process
+image_extensions: [".jpg", ".jpeg", ".png"]
