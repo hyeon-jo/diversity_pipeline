@@ -1,0 +1,53 @@
+# BEV Diversity Pipeline Configuration - VIDEO MODE (Single Folder)
+#
+# Use this when all frames are in a single folder and need to be grouped.
+# Frames are sorted by filename, then grouped into videos.
+
+# Model Configuration
+model:
+  model_path: "/path/to/InternVL3_5-8B"
+  torch_dtype: "bfloat16"
+  device: "cuda"
+
+# Video Processing Configuration
+video:
+  num_frames: 16
+  frame_sample_strategy: "uniform"
+  pooling_strategy: "mean"
+  normalize_embeddings: true
+
+# Input Structure Configuration
+input:
+  # Use single_folder mode for flat directory structure
+  mode: "single_folder"
+
+  # Number of frames per video for grouping
+  # Set to specific number (e.g., 100) to split frames into fixed-size groups
+  # Set to null to auto-detect by filename prefix pattern
+  frames_per_video: 100
+
+# Output and Memory Configuration
+output:
+  save_individual_embeddings: true
+  embedding_subdir: "embeddings"
+  skip_existing: true
+  save_combined_embeddings: true
+
+# Root directory containing all frame images
+# Expected structure:
+# input_dir/
+# ├── clip1_frame001.jpg
+# ├── clip1_frame002.jpg
+# ├── ...
+# ├── clip2_frame001.jpg
+# └── ...
+input_dir: "/path/to/frames"
+
+output_dir: "./output"
+image_extensions: [".jpg", ".jpeg", ".png"]
+
+# Vendi Score Configuration
+vendi:
+  q_values: [0.1, 0.5, 1.0, 2.0]
+  include_infinity: true
+  kernel: "cosine"

@@ -1,0 +1,30 @@
+# BEV Diversity Pipeline Configuration - EMBEDDING-ONLY MODE (Directory)
+#
+# Use this when you have a directory of individual embedding files (.npy)
+# from a previous video extraction run.
+#
+# No model loading required - fast Vendi Score computation only.
+
+# REQUIRED: Directory containing individual embedding files
+# Expected structure:
+# embedding_dir/
+# ├── video1.npy       # (D,) shape
+# ├── video2.npy       # (D,) shape
+# └── ...
+embedding_dir: "/path/to/embeddings"
+
+# Output directory for results
+output_dir: "./output"
+
+# Vendi Score Configuration
+vendi:
+  q_values: [0.1, 0.5, 1.0, 2.0]
+  include_infinity: true
+  kernel: "cosine"
+  rbf_gamma: 1.0
+
+# NOTE: In embedding-only mode, the following are NOT needed:
+# - model (no model loading)
+# - video (no frame processing)
+# - input (no input directory)
+# - output (no embedding saving)

@@ -1,0 +1,98 @@
+# BEV Diversity Pipeline Configuration - VIDEO MODE
+#
+# This configuration extracts video embeddings by:
+# 1. Sampling N frames uniformly from each video
+# 2. Extracting frame embeddings using InternVL vision encoder
+# 3. Pooling frame embeddings (mean) to get single video embedding
+# 4. Computing Vendi Score Family for video diversity
+#
+# Memory-optimized: each video embedding is saved immediately to disk
+
+# Model Configuration
+model:
+  # REQUIRED: Local path to InternVL3.5-8B model directory
+  model_path: "/path/to/InternVL3_5-8B"
+
+  # Input image size (default: 448x448 for InternVL)
+  input_size: 448
+
+  # Data type for model weights
+  # Options: "bfloat16" (recommended), "float16", "float32"
+  torch_dtype: "bfloat16"
+
+  # Device to run model on
+  device: "cuda"
+
+# Video Processing Configuration
+video:
+  # Number of frames to sample per video
+  num_frames: 16
+
+  # Frame sampling strategy
+  # Options: "uniform" (recommended), "random"
+  frame_sample_strategy: "uniform"
+
+  # Frame embedding pooling strategy
+  # Options: "mean" (recommended), "max"
+  pooling_strategy: "mean"
+
+  # Whether to L2-normalize the final video embedding
+  normalize_embeddings: true
+
+# Input Structure Configuration
+input:
+  # Input mode:
+  # - "video_folders": Each subdirectory is a video containing frames
+  # - "single_folder": All frames in one folder, grouped by name or count
+  mode: "video_folders"
+
+  # For "single_folder" mode only:
+  # Number of frames per video (null = auto-detect by filename pattern)
+  frames_per_video: null
+
+# Output and Memory Configuration
+output:
+  # Save each video embedding as separate file (memory optimization)
+  save_individual_embeddings: true
+
+  # Subdirectory name for individual embedding files
+  embedding_subdir: "embeddings"
+
+  # Skip videos that already have embeddings (resume support)
+  skip_existing: true
+
+  # Also save all embeddings as single combined file
+  save_combined_embeddings: true
+
+# REQUIRED: Root directory containing video folders
+# Expected structure for video_folders mode:
+# input_dir/
+# ├── video1/
+# │   ├── frame001.jpg
+# │   ├── frame002.jpg
+# │   └── ...
+# ├── video2/
+# │   └── ...
+input_dir: "/path/to/videos"
+
+# Output directory for results
+output_dir: "./output"
+
+# Image file extensions to process
+image_extensions: [".jpg", ".jpeg", ".png"]
+
+# Vendi Score Configuration
+vendi:
+  # Q values for generalized Vendi Score
+  # Smaller q: more sensitive to rare items
+  # Larger q: more sensitive to common items
+  q_values: [0.1, 0.5, 1.0, 2.0]
+
+  # Also compute VS_infinity (most sensitive to duplicates)
+  include_infinity: true
+
+  # Similarity kernel: "cosine" (recommended), "rbf", or "linear"
+  kernel: "cosine"
+
+  # RBF gamma parameter (only used if kernel="rbf")
+  rbf_gamma: 1.0
