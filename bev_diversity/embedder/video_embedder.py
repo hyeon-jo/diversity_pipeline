@@ -188,8 +188,8 @@ class VideoEmbedder:
                 continue
 
             try:
-                # Discover frames in this video folder
-                frame_paths = discover_frames_in_folder(video_folder, extensions)
+                # Discover frames in this video folder (no recursive, no progress for inner loop)
+                frame_paths = discover_frames_in_folder(video_folder, extensions, recursive=False, show_progress=False)
 
                 if not frame_paths:
                     print(f"\nWarning: No frames found in {video_folder}, skipping")
@@ -249,9 +249,7 @@ class VideoEmbedder:
         """
         root_dir = Path(root_dir)
 
-        print(f"Discovering video folders in {root_dir}...")
-        video_folders = discover_video_folders(root_dir)
-        print(f"Found {len(video_folders)} video folders")
+        video_folders = discover_video_folders(root_dir, show_progress=show_progress)
 
         if not video_folders:
             raise RuntimeError(f"No video folders found in {root_dir}")
@@ -289,13 +287,13 @@ class VideoEmbedder:
 
         root_dir = Path(root_dir)
 
-        print(f"Grouping frames in {root_dir}...")
         frame_groups = group_frames_single_folder(
             root_dir,
             extensions,
             frames_per_video or self.input_config.frames_per_video,
+            recursive=self.input_config.recursive,
+            show_progress=show_progress,
         )
-        print(f"Found {len(frame_groups)} video groups")
 
         if not frame_groups:
             raise RuntimeError(f"No frame groups found in {root_dir}")

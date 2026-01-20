@@ -87,6 +87,7 @@ class InputConfig:
 
     mode: str = "video_folders"  # "video_folders" or "single_folder"
     frames_per_video: Optional[int] = None  # For single_folder mode grouping
+    recursive: bool = True  # Whether to search subdirectories recursively
 
     def __post_init__(self):
         """Validate configuration."""
